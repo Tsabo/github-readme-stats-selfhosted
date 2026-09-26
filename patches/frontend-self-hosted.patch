@@ -1,0 +1,173 @@
+diff --git a/apps/frontend/src/constants.ts b/apps/frontend/src/constants.ts
+index 0da4e657..a0360ae8 100644
+--- a/apps/frontend/src/constants.ts
++++ b/apps/frontend/src/constants.ts
+@@ -9,10 +9,21 @@ const REDIRECT_URI = `https://${HOST}/frontend`;
+ export const GITHUB_PRIVATE_AUTH_URL = `https://github.com/login/oauth/authorize?scope=user,repo&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}?mode=private`;
+ export const GITHUB_PUBLIC_AUTH_URL = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}?mode=public`;
+ 
+-export const DEMO_USER = "anuraghazra" as string;
+-export const DEMO_REPO = "anuraghazra/github-readme-stats" as string;
+-export const DEMO_GIST = "bbfce31e0217a3689c8d961a356cb10d" as string;
+-export const DEMO_WAKATIME_USER = "alan" as string;
++/*
++ * Self-hosted builds set these at build time (`PUBLIC_*` is inlined by Vite).
++ * In self-hosted mode guests edit every field, and previews come from this host's `/api`
++ * (which holds the PAT) instead of being rendered in the browser from mock data.
++ */
++const env = import.meta.env as Record<string, string | undefined>;
++
++export const SELF_HOSTED = env["PUBLIC_SELF_HOSTED"] === "true";
++
++export const DEMO_USER = env["PUBLIC_DEMO_USER"] || "anuraghazra";
++export const DEMO_REPO =
++  env["PUBLIC_DEMO_REPO"] || "anuraghazra/github-readme-stats";
++export const DEMO_GIST =
++  env["PUBLIC_DEMO_GIST"] || "bbfce31e0217a3689c8d961a356cb10d";
++export const DEMO_WAKATIME_USER = env["PUBLIC_DEMO_WAKATIME_USER"] || "alan";
+ 
+ // imported backend code expects process.env to be defined
+ window.process = {
+diff --git a/apps/frontend/src/wizard/Home/Home.tsx b/apps/frontend/src/wizard/Home/Home.tsx
+index 5b0a0c8e..7724d032 100644
+--- a/apps/frontend/src/wizard/Home/Home.tsx
++++ b/apps/frontend/src/wizard/Home/Home.tsx
+@@ -4,7 +4,7 @@ import { useDispatch } from "react-redux";
+ import { BounceLoader } from "react-spinners";
+ import { v4 as uuidv4 } from "uuid";
+ 
+-import { DEMO_USER } from "../../constants";
++import { DEMO_USER, SELF_HOSTED } from "../../constants";
+ import {
+   useIsAuthenticated,
+   usePrivateAccess,
+@@ -261,7 +261,7 @@ export function HomeScreen({ stage, setStage }: HomeScreenProps): JSX.Element {
+               theme={theme}
+               card={themeBuilder}
+               guestHint={
+-                isAuthenticated
++                isAuthenticated || SELF_HOSTED
+                   ? null
+                   : `Replace the sample ${cardDescriptor.guestHint} with your own after copying your Markdown or URL!`
+               }
+diff --git a/apps/frontend/src/wizard/Home/stages/Customize.tsx b/apps/frontend/src/wizard/Home/stages/Customize.tsx
+index 21a9ef97..4ec8f358 100644
+--- a/apps/frontend/src/wizard/Home/stages/Customize.tsx
++++ b/apps/frontend/src/wizard/Home/stages/Customize.tsx
+@@ -5,6 +5,7 @@ import {
+   DEMO_REPO,
+   DEMO_USER,
+   DEMO_WAKATIME_USER,
++  SELF_HOSTED,
+ } from "../../../constants";
+ import { useIsAuthenticated } from "../../../redux/selectors/userSelectors";
+ import { LinkExternal } from "../../../shared/LinkExternal";
+@@ -93,7 +94,7 @@ export function CustomizeStage({
+               <>
+                 Enter a GitHub username.
+                 <br />
+-                {!isAuthenticated && (
++                {!isAuthenticated && !SELF_HOSTED && (
+                   <>
+                     Please{" "}
+                     <a
+@@ -124,7 +125,7 @@ export function CustomizeStage({
+                 pastedPathTail(e.clipboardData.getData("text"), 1),
+               );
+             }}
+-            disabled={!isAuthenticated}
++            disabled={!isAuthenticated && !SELF_HOSTED}
+           />
+         )}
+         {cardType === CardType.PIN && (
+@@ -134,7 +135,7 @@ export function CustomizeStage({
+               <>
+                 Enter a repository in <code>owner/repo</code> format.
+                 <br />
+-                {!isAuthenticated && (
++                {!isAuthenticated && !SELF_HOSTED && (
+                   <>
+                     Please{" "}
+                     <a
+@@ -165,7 +166,7 @@ export function CustomizeStage({
+                 pastedPathTail(e.clipboardData.getData("text"), 2),
+               );
+             }}
+-            disabled={!isAuthenticated}
++            disabled={!isAuthenticated && !SELF_HOSTED}
+           />
+         )}
+         {cardType === CardType.GIST && (
+@@ -175,7 +176,7 @@ export function CustomizeStage({
+               <>
+                 Enter a Gist id.
+                 <br />
+-                {!isAuthenticated && (
++                {!isAuthenticated && !SELF_HOSTED && (
+                   <>
+                     Please{" "}
+                     <a
+@@ -206,7 +207,7 @@ export function CustomizeStage({
+                 pastedPathTail(e.clipboardData.getData("text"), 1),
+               );
+             }}
+-            disabled={!isAuthenticated}
++            disabled={!isAuthenticated && !SELF_HOSTED}
+           />
+         )}
+         {cardType === CardType.WAKATIME && (
+diff --git a/apps/frontend/src/wizard/Wizard.tsx b/apps/frontend/src/wizard/Wizard.tsx
+index 10cb1eec..83882b8e 100644
+--- a/apps/frontend/src/wizard/Wizard.tsx
++++ b/apps/frontend/src/wizard/Wizard.tsx
+@@ -4,6 +4,7 @@ import { Provider, useDispatch } from "react-redux";
+ import { ToastContainer, toast } from "react-toastify";
+ 
+ import { clearAxiosCache } from "../axios-override";
++import { SELF_HOSTED } from "../constants";
+ import {
+   useIsAuthenticated,
+   useUserKey,
+@@ -64,7 +65,10 @@ function WizardApp(): JSX.Element {
+   const isAuthenticated = useIsAuthenticated();
+   const isDark = useIsDarkTheme();
+ 
+-  const [stage, setStage] = useState<StageIndex>(isAuthenticated ? 1 : 0);
++  const [stage, setStage] = useState<StageIndex>(
++    // Login needs the upstream OAuth app, so self-hosted builds start at card selection.
++    isAuthenticated || SELF_HOSTED ? 1 : 0,
++  );
+ 
+   const dispatch = useDispatch();
+ 
+diff --git a/apps/frontend/src/wizard/components/Card/SvgInline.tsx b/apps/frontend/src/wizard/components/Card/SvgInline.tsx
+index 0b64c5c4..0c3ec62c 100644
+--- a/apps/frontend/src/wizard/components/Card/SvgInline.tsx
++++ b/apps/frontend/src/wizard/components/Card/SvgInline.tsx
+@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
+ import type { JSX, Ref, RefCallback } from "react";
+ 
+ import { setShouldMock } from "../../../axios-override.js";
++import { SELF_HOSTED } from "../../../constants.js";
+ import {
+   useIsAuthenticated,
+   useUserToken,
+@@ -50,7 +51,7 @@ export function SvgInline(props: SvgInlineProps): JSX.Element {
+ 
+   // provide shouldMock to non-react code in axios-override.js
+   useEffect(() => {
+-    setShouldMock(stage === 0 || !isAuthenticated);
++    setShouldMock(!SELF_HOSTED && (stage === 0 || !isAuthenticated));
+   }, [isAuthenticated, stage]);
+ 
+   useEffect(() => {
+@@ -73,7 +74,8 @@ export function SvgInline(props: SvgInlineProps): JSX.Element {
+         return;
+       }
+ 
+-      if (stage === 4 && !isAuthenticated) {
++      // Self-hosted guests have no token, so this host's /api renders every preview.
++      if ((stage === 4 || SELF_HOSTED) && !isAuthenticated) {
+         const res = await axios.get<string>(url);
+         if (res.status >= 300) {
+           console.error("failed to fetch SVG");
