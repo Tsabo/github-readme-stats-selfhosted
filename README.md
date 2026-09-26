@@ -18,3 +18,40 @@ Self-hosted build of GitHub Stats Extended, the actively maintained successor to
 
 If you just want the public service, use GitHub Stats Extended.
 This repo is for people who like to own their infra. 😈
+
+## 📦 Images
+
+| Image | Dockerfile target | What it serves |
+| --- | --- | --- |
+| `github-readme-stats-selfhosted` | `runtime` | The card API (`/api`, `/api/pin`, `/api/top-langs`, …) on port `9000` |
+| `github-readme-stats-selfhosted-web` | `web` | The docs (`/frontend/docs`) and card wizard (`/frontend`) on port `8080`, and proxies `/api` to the backend |
+
+The wizard builds card URLs from the host it is served on, so it must share an origin with `/api` — put the `web` image in front and expose only it.
+Set `BACKEND_HOST` (default `github-readme-stats:9000`) if your backend container has a different name.
+
+The wizard's GitHub login is tied to the upstream OAuth app and does not work on a self-hosted instance; generating public cards does.
+
+## 🚀 Example `docker-compose.yml`
+
+```yaml
+services:
+  github-readme-stats:
+    image: ghcr.io/georgesalkhouri/github-readme-stats-selfhosted:latest
+    restart: unless-stopped
+    environment:
+      PAT_1: ${GITHUB_PAT}
+      # Exact, case-sensitive match on the `username` query parameter.
+      WHITELIST: "your-username"
+      # Gist IDs, not usernames.
+      # GIST_WHITELIST: "bbfce31e0217a3689c8d961a356cb10d"
+
+  web:
+    image: ghcr.io/georgesalkhouri/github-readme-stats-selfhosted-web:latest
+    restart: unless-stopped
+    depends_on:
+      - github-readme-stats
+    ports:
+      - "8080:8080"
+```
+
+Then open `http://localhost:8080/frontend/` for the wizard or request `http://localhost:8080/api?username=your-username`.

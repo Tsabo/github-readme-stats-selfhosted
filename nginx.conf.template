@@ -1,0 +1,36 @@
+# Rendered by the nginx image's envsubst entrypoint; only ${BACKEND_HOST} is substituted.
+upstream backend {
+  server ${BACKEND_HOST};
+}
+
+server {
+  listen 8080;
+  server_tokens off;
+
+  # Same landing page as the upstream Vercel deployment.
+  location = / {
+    return 302 /frontend/docs/;
+  }
+
+  location = /favicon.ico {
+    root /usr/share/nginx/html/frontend;
+  }
+
+  # Static docs (/frontend/docs) and card wizard (/frontend).
+  location /frontend/ {
+    root /usr/share/nginx/html;
+    try_files $uri $uri/ $uri.html =404;
+  }
+
+  # Card API: pure pass-through. Access control is the backend's WHITELIST / GIST_WHITELIST.
+  location /api {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://backend;
+  }
+
+  location / {
+    return 404;
+  }
+}
