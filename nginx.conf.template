@@ -6,6 +6,8 @@ upstream backend {
 server {
   listen 8080;
   server_tokens off;
+  # Behind a TLS proxy/tunnel; absolute redirects would leak http:// and :8080.
+  absolute_redirect off;
 
   # Same landing page as the upstream Vercel deployment.
   location = / {
@@ -14,6 +16,11 @@ server {
 
   location = /favicon.ico {
     root /usr/share/nginx/html/frontend;
+  }
+
+  # The OAuth callback lands on /frontend without a slash; keep its query (code, mode).
+  location = /frontend {
+    return 301 /frontend/$is_args$args;
   }
 
   # Static docs (/frontend/docs) and card wizard (/frontend).
