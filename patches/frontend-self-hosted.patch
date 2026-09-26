@@ -1,15 +1,11 @@
 diff --git a/apps/frontend/src/constants.ts b/apps/frontend/src/constants.ts
-index 0da4e657..a0360ae8 100644
+index 0da4e657..9673b932 100644
 --- a/apps/frontend/src/constants.ts
 +++ b/apps/frontend/src/constants.ts
-@@ -9,10 +9,21 @@ const REDIRECT_URI = `https://${HOST}/frontend`;
- export const GITHUB_PRIVATE_AUTH_URL = `https://github.com/login/oauth/authorize?scope=user,repo&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}?mode=private`;
- export const GITHUB_PUBLIC_AUTH_URL = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}?mode=public`;
+@@ -1,6 +1,19 @@
+ export const USE_LOGGER = true as boolean;
  
--export const DEMO_USER = "anuraghazra" as string;
--export const DEMO_REPO = "anuraghazra/github-readme-stats" as string;
--export const DEMO_GIST = "bbfce31e0217a3689c8d961a356cb10d" as string;
--export const DEMO_WAKATIME_USER = "alan" as string;
+-export const CLIENT_ID = "Ov23liZSweT9LJrck9i8";
 +/*
 + * Self-hosted builds set these at build time (`PUBLIC_*` is inlined by Vite).
 + * In self-hosted mode guests edit every field, and previews come from this host's `/api`
@@ -19,6 +15,22 @@ index 0da4e657..a0360ae8 100644
 +
 +export const SELF_HOSTED = env["PUBLIC_SELF_HOSTED"] === "true";
 +
++export const CLIENT_ID =
++  env["PUBLIC_OAUTH_CLIENT_ID"] || "Ov23liZSweT9LJrck9i8";
++
++// A self-hosted instance can only log in through its own OAuth app.
++export const LOGIN_ENABLED = !SELF_HOSTED || !!env["PUBLIC_OAUTH_CLIENT_ID"];
+ 
+ export const HOST = window.location.host;
+ 
+@@ -9,10 +22,12 @@ const REDIRECT_URI = `https://${HOST}/frontend`;
+ export const GITHUB_PRIVATE_AUTH_URL = `https://github.com/login/oauth/authorize?scope=user,repo&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}?mode=private`;
+ export const GITHUB_PUBLIC_AUTH_URL = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}?mode=public`;
+ 
+-export const DEMO_USER = "anuraghazra" as string;
+-export const DEMO_REPO = "anuraghazra/github-readme-stats" as string;
+-export const DEMO_GIST = "bbfce31e0217a3689c8d961a356cb10d" as string;
+-export const DEMO_WAKATIME_USER = "alan" as string;
 +export const DEMO_USER = env["PUBLIC_DEMO_USER"] || "anuraghazra";
 +export const DEMO_REPO =
 +  env["PUBLIC_DEMO_REPO"] || "anuraghazra/github-readme-stats";
@@ -117,14 +129,14 @@ index 21a9ef97..4ec8f358 100644
          )}
          {cardType === CardType.WAKATIME && (
 diff --git a/apps/frontend/src/wizard/Wizard.tsx b/apps/frontend/src/wizard/Wizard.tsx
-index 10cb1eec..83882b8e 100644
+index 10cb1eec..8dea6457 100644
 --- a/apps/frontend/src/wizard/Wizard.tsx
 +++ b/apps/frontend/src/wizard/Wizard.tsx
 @@ -4,6 +4,7 @@ import { Provider, useDispatch } from "react-redux";
  import { ToastContainer, toast } from "react-toastify";
  
  import { clearAxiosCache } from "../axios-override";
-+import { SELF_HOSTED } from "../constants";
++import { LOGIN_ENABLED } from "../constants";
  import {
    useIsAuthenticated,
    useUserKey,
@@ -134,8 +146,8 @@ index 10cb1eec..83882b8e 100644
  
 -  const [stage, setStage] = useState<StageIndex>(isAuthenticated ? 1 : 0);
 +  const [stage, setStage] = useState<StageIndex>(
-+    // Login needs the upstream OAuth app, so self-hosted builds start at card selection.
-+    isAuthenticated || SELF_HOSTED ? 1 : 0,
++    // Without its own OAuth app a self-hosted build cannot log in, so start at card selection.
++    isAuthenticated || !LOGIN_ENABLED ? 1 : 0,
 +  );
  
    const dispatch = useDispatch();

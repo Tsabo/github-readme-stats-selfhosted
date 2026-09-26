@@ -59,7 +59,7 @@ Then open `http://localhost:8080/frontend/` for the wizard or request `http://lo
 ## 🧙 Self-hosted wizard
 
 The `web` image applies [`patches/frontend-self-hosted.patch`](patches/frontend-self-hosted.patch) to the upstream frontend:
-guests skip the (upstream-only) login, can edit every field, and previews are rendered by this instance's `/api` instead of in-browser mock data.
+guests can edit every field, and previews are rendered by this instance's `/api` instead of in-browser mock data.
 The docs' example cards are rewritten to the same sample user and repo.
 
 | Build arg | Default | Used for |
@@ -68,6 +68,14 @@ The docs' example cards are rewritten to the same sample user and repo.
 | `DEMO_REPO` | `Tsabo/ClipMate` | Default repo pin in the wizard and docs |
 | `DEMO_GIST` | upstream sample | Default gist in the wizard and docs |
 | `DEMO_WAKATIME_USER` | upstream sample | Default WakaTime user in the wizard |
+| `OAUTH_CLIENT_ID` | `Ov23li6uNhWZqxFwH7Ci` | Client ID of your GitHub OAuth app; empty hides the wizard's login step |
 
 The samples must pass your `WHITELIST` / `GIST_WHITELIST`, or their previews show a "not whitelisted" card.
 If an upstream bump touches the patched files, `git apply` fails the build; regenerate the patch against the new `GSE_REF`.
+
+### Wizard login
+
+Login stores each user's GitHub token so their cards can use it (including private contributions). It needs:
+
+1. A [GitHub OAuth app](https://github.com/settings/developers) whose callback URL is `https://<your-host>/frontend`, with its client ID as the `OAUTH_CLIENT_ID` build arg.
+2. On the backend container: `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_URI=https://<your-host>/frontend`, and `POSTGRES_URL` (the tables are created automatically).

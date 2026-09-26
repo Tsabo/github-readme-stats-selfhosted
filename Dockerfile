@@ -37,6 +37,9 @@ ARG DEMO_USER=Tsabo
 ARG DEMO_REPO=Tsabo/ClipMate
 ARG DEMO_GIST=
 ARG DEMO_WAKATIME_USER=
+# Client ID of this instance's GitHub OAuth app (public). Empty hides the login step.
+# The backend needs OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_REDIRECT_URI and POSTGRES_URL at runtime.
+ARG OAUTH_CLIENT_ID=Ov23li6uNhWZqxFwH7Ci
 
 # Point the docs' example cards at the samples instead of upstream's author.
 RUN find apps/frontend/src/content/docs -name '*.md' -exec sed -i -E \
@@ -52,13 +55,14 @@ ENV HUSKY=0 \
   PUBLIC_DEMO_USER=${DEMO_USER} \
   PUBLIC_DEMO_REPO=${DEMO_REPO} \
   PUBLIC_DEMO_GIST=${DEMO_GIST} \
-  PUBLIC_DEMO_WAKATIME_USER=${DEMO_WAKATIME_USER}
+  PUBLIC_DEMO_WAKATIME_USER=${DEMO_WAKATIME_USER} \
+  PUBLIC_OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
 RUN corepack enable \
   && pnpm install --frozen-lockfile \
   && pnpm run build:packages \
   && pnpm run build:frontend
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS web
+FROM nginxinc/nginx-unprivileged:1.31.6-alpine AS web
 LABEL org.opencontainers.image.source="https://github.com/GeorgesAlkhouri/github-readme-stats-selfhosted" \
   org.opencontainers.image.description="Docs, card wizard and /api reverse proxy for stats-organization/github-stats-extended" \
   org.opencontainers.image.licenses="MIT"
