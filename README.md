@@ -55,3 +55,19 @@ services:
 ```
 
 Then open `http://localhost:8080/frontend/` for the wizard or request `http://localhost:8080/api?username=your-username`.
+
+## 🧙 Self-hosted wizard
+
+The `web` image applies [`patches/frontend-self-hosted.patch`](patches/frontend-self-hosted.patch) to the upstream frontend:
+guests skip the (upstream-only) login, can edit every field, and previews are rendered by this instance's `/api` instead of in-browser mock data.
+The docs' example cards are rewritten to the same sample user and repo.
+
+| Build arg | Default | Used for |
+| --- | --- | --- |
+| `DEMO_USER` | `Tsabo` | Default username in the wizard and docs |
+| `DEMO_REPO` | `Tsabo/ClipMate` | Default repo pin in the wizard and docs |
+| `DEMO_GIST` | upstream sample | Default gist in the wizard and docs |
+| `DEMO_WAKATIME_USER` | upstream sample | Default WakaTime user in the wizard |
+
+The samples must pass your `WHITELIST` / `GIST_WHITELIST`, or their previews show a "not whitelisted" card.
+If an upstream bump touches the patched files, `git apply` fails the build; regenerate the patch against the new `GSE_REF`.

@@ -12,6 +12,7 @@ on:
     paths:
       - "Dockerfile"
       - "nginx.conf.template"
+      - "patches/**"
       - ".github/workflows/**"
 jobs:
   lint-build-test:

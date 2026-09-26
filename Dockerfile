@@ -27,9 +27,32 @@ RUN node -e 'const fs = require("fs"); const path = "apps/backend/package.json";
 
 FROM source AS frontend-builder
 
+# Self-hosted wizard: guests edit every field and previews come from this instance's /api.
+COPY patches/ /tmp/patches/
+RUN git apply /tmp/patches/*.patch
+
+# Samples used by the wizard and the docs; the whitelist must allow them.
+# Empty gist / WakaTime values keep upstream's samples.
+ARG DEMO_USER=Tsabo
+ARG DEMO_REPO=Tsabo/ClipMate
+ARG DEMO_GIST=
+ARG DEMO_WAKATIME_USER=
+
+# Point the docs' example cards at the samples instead of upstream's author.
+RUN find apps/frontend/src/content/docs -name '*.md' -exec sed -i -E \
+    -e "s#username=anuraghazra&repo=[A-Za-z0-9_.-]+#username=${DEMO_REPO%%/*}\\&repo=${DEMO_REPO#*/}#g" \
+    -e "s#username=anuraghazra#username=${DEMO_USER}#g" \
+    -e "${DEMO_GIST:+s#id=bbfce31e0217a3689c8d961a356cb10d#id=${DEMO_GIST}#g}" \
+    {} +
+
 # Build the static docs + card wizard site (served under /frontend).
 # Install scripts must run here: esbuild and friends need their native binaries.
-ENV HUSKY=0
+ENV HUSKY=0 \
+  PUBLIC_SELF_HOSTED=true \
+  PUBLIC_DEMO_USER=${DEMO_USER} \
+  PUBLIC_DEMO_REPO=${DEMO_REPO} \
+  PUBLIC_DEMO_GIST=${DEMO_GIST} \
+  PUBLIC_DEMO_WAKATIME_USER=${DEMO_WAKATIME_USER}
 RUN corepack enable \
   && pnpm install --frozen-lockfile \
   && pnpm run build:packages \
