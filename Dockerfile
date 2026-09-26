@@ -1,4 +1,4 @@
-FROM node:24.21.0-alpine AS builder
+FROM node:24.21.0-alpine AS source
 
 RUN apk add --no-cache git
 
@@ -7,11 +7,13 @@ WORKDIR /app
 # Renovate-managed commit SHA of the stable upstream release branch.
 # Renovate only exposes upstream commits after a seven-day waiting period.
 # renovate: datasource=custom.github-stats-extended-aged depName=github-stats-extended packageName=stats-organization/github-stats-extended currentValue=0
-ARG GSE_REF=84835caea1ffa3c3809b927547b8f69bfd6b80db
+ARG GSE_REF=9313d3da7957d09befa2cc620b137c1ba05de096
 
 # 1) Clone upstream repo
 RUN git clone https://github.com/stats-organization/github-stats-extended.git . \
   && git checkout "${GSE_REF}"
+
+FROM source AS builder
 
 # 2) Install the pinned pnpm workspace and build the shared core package.
 RUN corepack enable \
@@ -22,6 +24,29 @@ RUN corepack enable \
 # deploy only the backend and its production dependencies.
 RUN node -e 'const fs = require("fs"); const path = "apps/backend/package.json"; const pkg = JSON.parse(fs.readFileSync(path)); const version = pkg.dependencies?.express ?? pkg.devDependencies?.express; if (!version) throw new Error("Upstream no longer declares express"); pkg.dependencies = { ...pkg.dependencies, express: version }; if (pkg.devDependencies) delete pkg.devDependencies.express; fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' \
   && pnpm --ignore-scripts --filter @stats-organization/github-readme-stats-backend --prod deploy --legacy /prod/backend
+
+FROM source AS frontend-builder
+
+# Build the static docs + card wizard site (served under /frontend).
+# Install scripts must run here: esbuild and friends need their native binaries.
+ENV HUSKY=0
+RUN corepack enable \
+  && pnpm install --frozen-lockfile \
+  && pnpm run build:packages \
+  && pnpm run build:frontend
+
+FROM nginxinc/nginx-unprivileged:1.29-alpine AS web
+LABEL org.opencontainers.image.source="https://github.com/GeorgesAlkhouri/github-readme-stats-selfhosted" \
+  org.opencontainers.image.description="Docs, card wizard and /api reverse proxy for stats-organization/github-stats-extended" \
+  org.opencontainers.image.licenses="MIT"
+
+# host:port of the backend (runtime) container; substituted into the nginx template at startup.
+ENV BACKEND_HOST=github-readme-stats:9000
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=frontend-builder /app/apps/frontend/build /usr/share/nginx/html/frontend
+
+EXPOSE 8080
 
 FROM node:24.21.0-alpine AS runtime
 LABEL org.opencontainers.image.source="https://github.com/GeorgesAlkhouri/github-readme-stats-selfhosted" \

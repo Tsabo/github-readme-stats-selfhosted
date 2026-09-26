@@ -11,6 +11,7 @@ on:
       - "feat/*"
     paths:
       - "Dockerfile"
+      - "nginx.conf.template"
       - ".github/workflows/**"
 jobs:
   lint-build-test:
@@ -40,20 +41,43 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          target: runtime
           push: false
           load: true
           tags: local/github-readme-stats:test
 
-      - name: Smoke test container
+      - name: Build web image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: web
+          push: false
+          load: true
+          tags: local/github-readme-stats-web:test
+
+      - name: Smoke test containers
         run: |
-          docker run -d --rm --name grs -p 9000:9000 \
+          docker network create grs
+          docker run -d --rm --name github-readme-stats --network grs -p 9000:9000 \
             -e PAT_1=$GH_README_STATS_PAT \
             local/github-readme-stats:test
+          docker run -d --rm --name grs-web --network grs -p 8080:8080 \
+            local/github-readme-stats-web:test
           sleep 5
           curl -f "http://localhost:9000/api?username=octocat" -o /tmp/card.svg
           file /tmp/card.svg
           grep -q "<svg" /tmp/card.svg
-          docker logs grs
-          docker stop grs
+          # Trailing slash must resolve like on Vercel (regression guard).
+          curl -f "http://localhost:9000/api/pin/?username=octocat&repo=Hello-World" -o /tmp/pin.svg
+          grep -q "<svg" /tmp/pin.svg
+          # Web image: static site plus /api pass-through.
+          curl -f "http://localhost:8080/frontend/" -o /dev/null
+          curl -f "http://localhost:8080/frontend/docs/" -o /dev/null
+          curl -f "http://localhost:8080/api/pin/?username=octocat&repo=Hello-World" -o /tmp/pin-web.svg
+          grep -q "<svg" /tmp/pin-web.svg
+          docker logs github-readme-stats
+          docker logs grs-web
+          docker stop grs-web github-readme-stats
         env:
           GH_README_STATS_PAT: ${{ secrets.GH_README_STATS_PAT }}
